@@ -16,7 +16,7 @@ if [ -z "$PROCEDURE" ] || [ -z "$PARAMS" ] || [ -z "$KEY_ID" ] || [ -z "$KEY_SEC
 fi
 
 token=$(curl -sS --user "$KEY_ID:$KEY_SECRET" \
-	--data-urlencode 'grant_type=client_credentials' --data-urlencode 'scope=zela-builder:read zela-builder:write' \
+	--data-urlencode 'grant_type=client_credentials' --data-urlencode 'scope=zela-executor:call' \
 	https://auth.zela.io/realms/zela/protocol/openid-connect/token | jq -r .access_token)
 # a little bit stupid but we print the output of the request to stderr and capture timing information on stdout
 stats=$(curl -s --write-out '%{stdout}%{time_starttransfer} %{time_pretransfer}' -o /dev/stderr \

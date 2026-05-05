@@ -2,40 +2,10 @@
 
 *Snapshot taken 2026-05-05 from `zela-demo/run-procedure.sh` and the `#[tokio::test]` block in `priority_fees`. Source of truth for behavior is `https://docs.zela.io/`.*
 
-## 1. Native unit test pattern
+## 1. Native unit test shapes
 
-Two shapes are seen in the wild.
-
-**Shape A — simple inherent run** (procedures with cfg-gated RPC, e.g. `priority_fees`):
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use solana_client::nonblocking::rpc_client::RpcClient;
-    use solana_sdk::commitment_config::CommitmentConfig;
-
-    #[tokio::test]
-    async fn test() {
-        let _ = env_logger::builder()
-            .is_test(true)
-            .parse_env(env_logger::Env::new().default_filter_or("info,priority_fees=debug")) // replace with your crate name
-            .try_init();
-
-        let rpc = RpcClient::new_with_commitment(
-            "https://api.mainnet-beta.solana.com".to_owned(),
-            CommitmentConfig::confirmed(),
-        );
-        let input = Input { /* ... */ };
-        let out = MyProc::run(&input, &rpc).await.unwrap();
-        println!("{out:#?}");
-    }
-}
-```
-
-This requires the procedure to expose an inherent `pub async fn run(input, rpc) -> Result<Output, String>` on the native side, and gate the `CustomProcedure` impl behind `#[cfg(target_arch = "wasm32")]`.
-
-**Shape B — direct trait test** (procedures without external RPC, e.g. `hello_world`): just call `MyProc::run(input).await` from a `#[tokio::test]` — no cfg gymnastics needed.
+- **With RPC** (e.g. `priority_fees`): the procedure exposes an inherent `pub async fn run(input, rpc) -> Result<Output, String>`, and the `CustomProcedure` impl is gated `#[cfg(target_arch = "wasm32")]`. Tests build a native `solana_client::nonblocking::rpc_client::RpcClient` (e.g. against `https://api.mainnet-beta.solana.com`) and call the inherent `run`. See `procedure-anatomy.md` for the full pattern.
+- **Without RPC** (e.g. `hello_world`): no cfg gymnastics — `#[tokio::test]` calling `MyProc::run(input).await` directly.
 
 ## 2. Required env vars (Python helper flow)
 
@@ -51,11 +21,10 @@ The shell script `run-procedure.sh` instead reads `ZELA_PROJECT_KEY_ID` and `ZEL
 
 ## 3. OAuth2 (client_credentials)
 
-- Method: `POST {ZELA_TOKEN_URL}`
-- Auth: HTTP Basic `(ZELA_CLIENT_ID, ZELA_PRIVATE_KEY)`
-- Body (form-encoded): `grant_type=client_credentials`, `scope=zela-builder:read zela-builder:write zela-executor:call`
-- Response: JSON; extract `access_token`
-- Shell-script scope is narrower: just `zela-executor:call` (read-only invoke).
+Standard `client_credentials` flow against `ZELA_TOKEN_URL` with HTTP Basic `(ZELA_CLIENT_ID, ZELA_PRIVATE_KEY)`. Zela-specific bits:
+
+- Full scope: `zela-builder:read zela-builder:write zela-executor:call`.
+- Read-only invoke (`run-procedure.sh`): `zela-executor:call`.
 
 ## 4. Upload `.wasm`
 

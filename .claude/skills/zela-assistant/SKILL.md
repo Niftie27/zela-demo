@@ -82,12 +82,10 @@ Each ends with *"verify via `discovery.md` if uncertain"*:
 3. Mirror the existing logging convention (e.g. phase-tagged `log::info!("[PHASE] ...")`).
 4. Run `cargo test --package <name>` (if a `#[cfg(test)]` block exists), then `cargo build --release --target wasm32-wasip2 --package <name>`.
 
-**Debug a build failure**
+**Debug a Zela-specific build failure**
 
-1. Confirm `rustup target list --installed | grep wasm32-wasip2`.
-2. Confirm the workspace `Cargo.toml` rev for `zela-std` matches what the code uses.
-3. Check cfg-gating: native-only deps (e.g. `solana-client`) must live under `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`.
-4. Consult the failure table in `references/compile-and-setup.md`.
+1. cfg-gating: `zela_std::rpc_client::RpcClient` must be gated `#[cfg(target_arch = "wasm32")]`; `solana-client` must live under `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`.
+2. If symbols from `zela_std` don't match: re-read the workspace `Cargo.toml` `rev` and refetch `zela-std` source at that rev (see `references/discovery.md`).
 
 ## When to refetch
 

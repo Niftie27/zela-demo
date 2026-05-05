@@ -4,9 +4,8 @@
 
 ## 1. Toolchain prerequisites
 
-- `rustup target add wasm32-wasip2`. If `rustup` reports the target is unavailable, `rustup update stable` first.
-- Optional: a Nix shell pinning the WASI SDK lives at `zela-demo/shell.nix`.
-- `cargo --version` should report a Rust toolchain that supports `edition = "2024"` and `resolver = "3"` (Rust 1.85+ as of the snapshot).
+- Target: `wasm32-wasip2`.
+- WASI SDK: optional Nix shell at `zela-demo/shell.nix` pins it.
 
 ## 2. Workspace integration
 
@@ -68,8 +67,7 @@ Note: `block_time` diverges from the example above — it pins `solana-sdk = "3.
 Key rules:
 
 - `crate-type = ["cdylib"]` is mandatory — Zela loads the resulting `.wasm` as a dylib.
-- Native-only deps (anything that calls into `std::net`, opens sockets, or uses `solana-client`) live under `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`. Putting them in plain `[dependencies]` breaks the wasm build with linker errors.
-- `tokio` and `env_logger` belong in `[dev-dependencies]` — they're for `cargo test`, not the wasm artifact.
+- Native-only deps (sockets, `solana-client`) must live under `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` or the wasm build breaks with linker errors.
 
 ## 4. cfg-gating snippet (use both directions)
 
@@ -83,25 +81,14 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 
 When the procedure uses an RPC client *and* has a native `#[cfg(test)]` block, also wrap the `CustomProcedure` impl itself in `#[cfg(target_arch = "wasm32")] mod zela { ... zela_custom_procedure!(X); }` and provide an inherent `impl X { pub async fn run(p, rpc) -> Result<_, String> { ... } }` for the native side. See `references/procedure-anatomy.md` for the full pattern.
 
-## 5. Build commands
+## 5. Build the WASM artifact
 
-| Goal | Command | Output |
-| --- | --- | --- |
-| WASM artifact | `cargo build --release --target wasm32-wasip2 --package <name>` | `target/wasm32-wasip2/release/<name>.wasm` |
-| Fast native check | `cargo check --package <name>` | (no artifact) |
-| Native unit tests | `cargo test --package <name>` | test binaries under `target/debug/` |
+```
+cargo build --release --target wasm32-wasip2 --package <name>
+```
 
-## 6. Common build failures
+Output: `target/wasm32-wasip2/release/<name>.wasm`. Native `cargo check` / `cargo test` work as usual.
 
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| `error: target wasm32-wasip2 not found` | Target not installed | `rustup target add wasm32-wasip2` |
-| `unresolved import zela_std::rpc_client` on native build | cfg-gate inverted | Make sure `zela_std::rpc_client::RpcClient` is gated `#[cfg(target_arch = "wasm32")]` |
-| Linker errors mentioning `solana_client` on wasm | Native client leaked into wasm build | Move `solana-client` under `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` |
-| `mismatched zela-std symbols` / undefined trait items | Workspace `rev` older/newer than the code expects | Re-read root `Cargo.toml`, refetch `zela-std` source at that rev (see `discovery.md`) |
-| `error[E0658]: ...edition2024` | Toolchain too old | `rustup update stable` |
-| `failed to load source for git dependency` | Network or rev typo | Verify the rev exists at `https://github.com/Zela-io/zela-std/commits` |
-
-## 7. `run-procedure.sh` pointer
+## 6. `run-procedure.sh` pointer
 
 `zela-demo/run-procedure.sh` is the official one-line CLI invoker. It uses different env vars from the Python helpers (`ZELA_PROJECT_KEY_ID`, `ZELA_PROJECT_KEY_SECRET`) and hardcodes the auth + executor URLs. Read it before recommending a custom invocation script.

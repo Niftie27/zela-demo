@@ -114,15 +114,7 @@ RpcError { code: i64, message: String, data: Option<Self::ErrorData> }
 
 ## Logging
 
-- `LOG_MAX_LEVEL` is a hard ceiling; messages above this level are suppressed at runtime. Use `log::LevelFilter::Debug` while developing, `Info` for production-like procedures.
-- Phase-tagged style: `log::info!("[PHASE] field={}, ms={}", x, y)` — makes log scanning easier across phases of a multi-step procedure.
-
-## Serde conventions
-
-- Inputs derive `Deserialize` (often plus `Debug`).
-- Outputs derive `Serialize`.
-- Enum responses with case-style: `#[serde(rename_all = "snake_case")]`.
-- Untagged input enums for "either-or" params: `#[derive(Deserialize)] #[serde(untagged)] pub enum Input { Latest { ... }, Specific { ... } }` — pattern used in `priority_fees`.
+`LOG_MAX_LEVEL` is a `const` on the trait — it's set at compile time, not runtime. Phase-tagged convention seen in the codebase: `log::info!("[PHASE] field={}, ms={}", x, y)`.
 
 ## What's NOT in this snapshot
 

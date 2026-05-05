@@ -21,55 +21,80 @@ The shell script `run-procedure.sh` instead reads `ZELA_PROJECT_KEY_ID` and `ZEL
 
 ## 3. OAuth2 (client_credentials)
 
-Standard `client_credentials` flow against `ZELA_TOKEN_URL` with HTTP Basic `(ZELA_CLIENT_ID, ZELA_PRIVATE_KEY)`. Zela-specific bits:
+Standard `client_credentials` flow against `ZELA_TOKEN_URL` with HTTP Basic `(ZELA_CLIENT_ID, ZELA_PRIVATE_KEY)`. Per docs the IDP URL is `https://auth.zela.io/realms/zela/protocol/openid-connect/token`.
 
-- Full scope: `zela-builder:read zela-builder:write zela-executor:call`.
-- Read-only invoke (`run-procedure.sh`): `zela-executor:call`.
+Per docs *Scope Types*:
 
-## 4. Upload `.wasm`
+- `zela-executor:call` — execute a procedure / call Zela JSON-RPC.
+- `zela-builder:read` + `zela-builder:write` — both required to upload a manually-built procedure.
 
-- Method: `POST {ZELA_CORE_URL}/procedures/{procedure}/wasm`
+Pick scopes based on what you'll do: invoke only → `zela-executor:call`; upload + invoke → all three.
+
+## 4. Upload `.wasm` (manual upload only)
+
+Used when the procedure is not GitHub-linked. From the docs §*Manual Upload*:
+
+- Method: `POST {ZELA_CORE_URL}/procedures/<procedure>/wasm`
 - Headers: `Authorization: Bearer <token>`, `Content-Type: application/wasm`
-- Query: `project={project_id}`, `file_name={filename}`
+- Query: `project=<project_uuid>`, `file_name=<filename>`
 - Body: raw WASM bytes
-- Versioning: SHA-1 hex of the bytes is the de-facto procedure version.
-- `422` = duplicate hash (treated as no-op success). The local Python helper caches uploaded SHA-1s in `.cache/wasm_uploads.json` to skip re-uploads.
+- Required scopes on the JWT: `zela-builder:read` *and* `zela-builder:write`
+- Project UUID lives in the API key (`rpk-<PROJECT_UUID>-<INTERNAL>`) or the Dashboard
+
+Identifier hash for manually uploaded procedures = **SHA-1 of the WASM bytes**. For GitHub-linked procedures, the identifier hash is the **Git commit hash** instead — the Builder produces it.
 
 ## 5. Execute (JSON-RPC 2.0)
 
-- Method: `POST {ZELA_EXECUTOR_URL}`
-- Headers: `Authorization: Bearer <token>`, `Content-Type: application/json`, optional `zela-route-by: <route>`, optional `zela-route-dbg: true`
+- Method: `POST {ZELA_EXECUTOR_URL}` (`https://executor.zela.io`)
+- Headers (required): `Authorization: Bearer <token>`, `Content-Type: application/json`
 - Body shape:
 
 ```json
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "method": "zela.<procedure>#<sha1_hex>",
+  "method": "zela.<procedure>#<identifier_hash>",
   "params": { /* matches the procedure's Params */ }
 }
 ```
 
-- The `#<sha1_hex>` suffix is **optional** — without it, the executor picks the routed default. With it, you pin to a specific upload.
-- Debug response header (when `zela-route-dbg: true` was sent): `zela-routed-dbg` (JSON).
+- The `#<identifier_hash>` suffix is **always required**. It is the Git commit hash (Builder-built) or the SHA-1 of the WASM (manual upload).
+- Optional header `zela-route-by`: `auto` (default — follows the Solana Leader) or `static <instance_label>` (e.g. `static fr2`). Default is `auto` if the header is omitted.
 
-## 6. End-to-end pipeline
+## 6. End-to-end pipeline (manual-upload variant)
 
 ```
 cargo build --release --target wasm32-wasip2 --package <name>
         ↓
 target/wasm32-wasip2/release/<name>.wasm
-        ↓ sha1
+        ↓
 hash = sha1_hex(bytes)
         ↓
-POST {token}  → access_token        (needed for both upload and execute)
-        ↓ if hash not cached
-POST {core}/procedures/<name>/wasm  (Authorization: Bearer; Content-Type: application/wasm)
+POST {token}  → access_token            (scopes: zela-builder:read/write to upload, zela-executor:call to invoke)
+        ↓
+POST {core}/procedures/<name>/wasm      (Bearer; application/wasm; ?project=...&file_name=...)
         ↓
 POST {executor}  body method = "zela.<name>#<hash>"  → result
 ```
 
-## 7. Pointers
+For GitHub-linked procedures: skip the upload row; `<hash>` is the commit hash that produced the Success build.
+
+## 7. Calling a procedure with `solana_client::RpcClient::send`
+
+`RpcClient::send` requires `params` to be an array. To make your procedure callable from a Rust client that uses it, accept `[YourParams; 1]` and destructure:
+
+```rust
+type Params = [YourParams; 1];
+
+async fn run(params: Self::Params) -> Result<Self::SuccessData, RpcError<Self::ErrorData>> {
+    let [params] = params;
+    // ...
+}
+```
+
+(From the docs *Common Debugging Steps*.)
+
+## 8. Pointers
 
 - `zela-demo/run-procedure.sh` — minimal shell-only invoker.
 - `https://docs.zela.io/` — authoritative behavior spec; refetch when in doubt.

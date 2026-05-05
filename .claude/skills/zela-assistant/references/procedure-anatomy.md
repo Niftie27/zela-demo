@@ -75,7 +75,7 @@ mod zela {
         type Params      = Input;
         type ErrorData   = ();
         type SuccessData = Output;
-        const LOG_MAX_LEVEL: log::LevelFilter = log::LevelFilter::Info;
+        const LOG_MAX_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
         async fn run(params: Self::Params) -> Result<Self::SuccessData, RpcError<Self::ErrorData>> {
             let rpc = RpcClient::new();

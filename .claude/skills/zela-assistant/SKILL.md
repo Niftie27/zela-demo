@@ -70,7 +70,7 @@ Each ends with *"verify via `discovery.md` if uncertain"*:
 - Procedure crate: `crate-type = ["cdylib"]`, `edition = "2024"`, target `wasm32-wasip2`.
 - Build: `cargo build --release --target wasm32-wasip2 --package <name>`.
 - Trait surface: `impl CustomProcedure for X { type Params; type SuccessData; type ErrorData; const LOG_MAX_LEVEL; async fn run; }` then `zela_custom_procedure!(X);`.
-- Imports always include `use zela_std::{CustomProcedure, RpcError, zela_custom_procedure};`.
+- The trait references `CustomProcedure`, `RpcError`, and `zela_custom_procedure!` from `zela_std` — typically imported via `use zela_std::{CustomProcedure, RpcError, zela_custom_procedure};` (some crates qualify `zela_std::RpcError` inline instead, e.g. `block_time`).
 - cfg-gating for RPC: `#[cfg(target_arch = "wasm32")]` → `zela_std::rpc_client::RpcClient`; `#[cfg(not(target_arch = "wasm32"))]` → `solana_client::nonblocking::rpc_client::RpcClient` for native tests.
 
 ## Edit / debug playbooks

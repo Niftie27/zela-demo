@@ -4,8 +4,17 @@
 
 ## 1. Toolchain prerequisites
 
-- Target: `wasm32-wasip2`.
-- WASI SDK: optional Nix shell at `zela-demo/shell.nix` pins it.
+- Rust target: `wasm32-wasip2` (`rustup target add wasm32-wasip2`).
+- **WASI SDK** is required for compiling C/C++ deps used in Solana crates (zstd, etc.). Per docs §*Manual Upload → Prerequisites*: download from <https://github.com/WebAssembly/wasi-sdk/releases/>, then export:
+
+  ```bash
+  export CC_wasm32_wasip2="$HOME/.wasi-sdk/bin/clang"
+  export WASI_SYSROOT="$HOME/.wasi-sdk/share/wasi-sysroot"
+  ```
+
+  Without these env vars, `cargo build --target wasm32-wasip2` will fail at the `cc-rs` build step with `unable to create target: 'No available targets are compatible with triple "wasm32-unknown-wasip2"'`.
+
+- Alternative: a Nix shell at `zela-procedure-test/shell.nix` pins the same SDK.
 
 ## 2. Workspace integration
 
